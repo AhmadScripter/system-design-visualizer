@@ -1,0 +1,65 @@
+<div class="container-fluid h-100">
+    <div class="row h-100">
+
+        <!-- Sidebar -->
+        <div class="col-2 sidebar p-3 d-flex flex-column gap-2">
+            <h6 class="text-muted fw-semibold mb-1">NODES</h6>
+
+            <button class="btn btn-primary btn-sm w-100" (click)="addNode('server')">
+                🖥️ Add Server
+            </button>
+            <button class="btn btn-success btn-sm w-100" (click)="addNode('database')">
+                🗄️ Add Database
+            </button>
+            <button class="btn btn-warning btn-sm w-100" (click)="addNode('api')">
+                🔌 Add API
+            </button>
+            <button class="btn btn-info btn-sm w-100" (click)="addNode('client')">
+                💻 Add Client
+            </button>
+
+            <hr class="my-1" />
+
+            <div class="legend">
+                <p class="small text-muted mb-1 fw-semibold">HOW TO CONNECT</p>
+                <div class="d-flex align-items-center gap-2 mb-1">
+                    <span class="dot dot-green"></span>
+                    <span class="small text-muted">Drag from green dot</span>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="dot dot-red"></span>
+                    <span class="small text-muted">Drop onto red dot</span>
+                </div>
+            </div>
+
+            <hr class="my-1" />
+            <button class="btn btn-dark btn-sm w-100" (click)="saveDiagram()">
+                💾 Save Diagram
+              </button>
+              
+              <button class="btn btn-secondary btn-sm w-100" (click)="loadDiagram()">
+                📂 Load Diagram
+              </button>
+            <hr class="my-1" />
+
+            <button class="btn btn-outline-danger btn-sm w-100 mt-auto" (click)="deleteAllConnections()">
+                🗑️ Clear Connections
+            </button>
+        </div>
+
+        <!-- Canvas -->
+        <div class="col-10 canvas-area" id="canvas">
+            <div *ngFor="let node of nodes; let i = index" class="node" [class]="'node node-' + node.type"
+                [attr.id]="'node-' + i" [ngStyle]="{ top: node.y + 'px', left: node.x + 'px' }">
+                <span class="node-icon">
+                    {{ node.type === 'server' ? '🖥️'
+                    : node.type === 'database' ? '🗄️'
+                    : node.type === 'api' ? '🔌'
+                    : '💻' }}
+                </span>
+                <span class="node-label">{{ node.type | titlecase }}</span>
+            </div>
+        </div>
+
+    </div>
+</div>
