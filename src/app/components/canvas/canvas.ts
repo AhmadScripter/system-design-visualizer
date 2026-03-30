@@ -84,8 +84,11 @@ export class Canvas implements AfterViewInit {
       grid: [1, 1],
       stop: (event: any) => {
         const style = el.style;
-        el.setAttribute('data-x', parseInt(style.left, 10).toString());
-        el.setAttribute('data-y', parseInt(style.top, 10).toString());
+        const left = parseInt(style.left, 10);
+        const top = parseInt(style.top, 10);
+
+        this.nodes[index].x = left;
+        this.nodes[index].y = top;
       },
     });
 
@@ -123,7 +126,6 @@ export class Canvas implements AfterViewInit {
   saveDiagram() {
     if (!this.instance) return;
 
-    // Read position from el.style.left/top, jsPlumb sets these
     const nodesData: NodeData[] = this.nodes.map((node, i) => {
       const el = document.getElementById('node-' + i);
       const x = el ? parseInt(el.style.left, 10) : node.x;
@@ -140,7 +142,7 @@ export class Canvas implements AfterViewInit {
     const diagram: SavedDiagram = { nodes: nodesData, connections };
     localStorage.setItem('diagram', JSON.stringify(diagram));
     console.log('Diagram saved:', diagram);
-    alert('Diagram saved ✅');
+    alert('Diagram saved');
   }
 
   // ------ Load ---------
@@ -179,5 +181,160 @@ export class Canvas implements AfterViewInit {
         });
       });
     });
+  }
+
+  async downloadAsImage() {
+    if (!this.instance) return;
+  
+    this.instance.setSuspendDrawing(false, true);
+    this.instance.repaintEverything();
+    await new Promise(r => setTimeout(r, 100));
+  
+    const canvasEl = document.getElementById('canvas') as HTMLElement;
+    const W = canvasEl.offsetWidth;
+    const H = canvasEl.offsetHeight;
+    const SCALE = 2;
+  
+    const out = document.createElement('canvas');
+    out.width  = W * SCALE;
+    out.height = H * SCALE;
+    const ctx  = out.getContext('2d')!;
+    ctx.scale(SCALE, SCALE);
+  
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+  
+    const connections: any[] = this.instance.getAllConnections();
+  
+    for (const conn of connections) {
+      const pathEl: SVGPathElement | null =
+        conn.canvas?.querySelector('path') ??
+        conn.connector?.canvas?.querySelector('path') ??
+        null;
+  
+      if (pathEl) {
+        const pathSvg    = pathEl.closest('svg') as SVGSVGElement;
+        const svgRect    = pathSvg.getBoundingClientRect();
+        const canvasRect = canvasEl.getBoundingClientRect();
+        const dx = svgRect.left - canvasRect.left;
+        const dy = svgRect.top  - canvasRect.top;
+  
+        const d = pathEl.getAttribute('d') ?? '';
+  
+        ctx.save();
+        ctx.translate(dx, dy);
+        ctx.strokeStyle = '#6c757d';
+        ctx.lineWidth   = 2;
+        ctx.lineJoin    = 'round';
+        ctx.lineCap     = 'round';
+  
+        ctx.beginPath();
+        const p2d = new Path2D(d);
+        ctx.stroke(p2d);
+  
+        this._drawArrow(ctx, pathEl);
+  
+        ctx.restore();
+      }
+    }
+  
+    const nodeColors: Record<string, { bg: string; border: string; text: string }> = {
+      server:   { bg: '#cfe2ff', border: '#0d6efd', text: '#084298' },
+      database: { bg: '#d1e7dd', border: '#198754', text: '#0a3622' },
+      api:      { bg: '#fff3cd', border: '#ffc107', text: '#664d03' },
+      client:   { bg: '#cff4fc', border: '#0dcaf0', text: '#055160' },
+    };
+  
+    const icons: Record<string, string> = {
+      server: '🖥️', database: '🗄️', api: '🔌', client: '💻',
+    };
+  
+    for (let i = 0; i < this.nodes.length; i++) {
+      const node    = this.nodes[i];
+      const el      = document.getElementById('node-' + i);
+      if (!el) continue;
+  
+      const x = parseInt(el.style.left, 10);
+      const y = parseInt(el.style.top,  10);
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const r = 8;
+  
+      const colors = nodeColors[node.type] ?? nodeColors['server'];
+  
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.arcTo(x + w, y,     x + w, y + r,     r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+      ctx.lineTo(x + r, y + h);
+      ctx.arcTo(x,     y + h, x,     y + h - r, r);
+      ctx.lineTo(x,     y + r);
+      ctx.arcTo(x,     y,     x + r, y,         r);
+      ctx.closePath();
+      ctx.fillStyle   = colors.bg;
+      ctx.fill();
+      ctx.strokeStyle = colors.border;
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+  
+      ctx.font         = '16px serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(icons[node.type] ?? '📦', x + w / 2, y + h / 2 - 8);
+  
+      ctx.font         = '600 12px sans-serif';
+      ctx.fillStyle    = colors.text;
+      ctx.textBaseline = 'middle';
+      const label = node.type.charAt(0).toUpperCase() + node.type.slice(1);
+      ctx.fillText(label, x + w / 2, y + h / 2 + 10);
+  
+      ctx.beginPath();
+      ctx.arc(x + w, y + h / 2, 7, 0, Math.PI * 2);
+      ctx.fillStyle   = '#198754';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+  
+      ctx.beginPath();
+      ctx.arc(x, y + h / 2, 7, 0, Math.PI * 2);
+      ctx.fillStyle   = '#dc3545';
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth   = 2;
+      ctx.stroke();
+    }
+  
+    const link    = document.createElement('a');
+    link.download = 'system-design.png';
+    link.href     = out.toDataURL('image/png');
+    link.click();
+  }
+  
+  private _drawArrow(ctx: CanvasRenderingContext2D, pathEl: SVGPathElement) {
+    try {
+      const totalLen = pathEl.getTotalLength();
+      if (totalLen < 10) return;
+  
+      const pt1 = pathEl.getPointAtLength(totalLen - 10);
+      const pt2 = pathEl.getPointAtLength(totalLen);
+  
+      const angle = Math.atan2(pt2.y - pt1.y, pt2.x - pt1.x);
+      const size  = 10;
+  
+      ctx.save();
+      ctx.translate(pt2.x, pt2.y);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#6c757d';
+      ctx.beginPath();
+      ctx.moveTo(0,      0);
+      ctx.lineTo(-size, -size / 2.5);
+      ctx.lineTo(-size,  size / 2.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } catch (_) {}
   }
 }
