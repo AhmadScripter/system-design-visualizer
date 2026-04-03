@@ -35,6 +35,11 @@
   white-space: nowrap;
 }
 
+.node.selected {
+  outline: 3px solid #000;
+  transform: scale(1.01);
+}
+
 .canvas-area .node[style] {
   position: absolute !important;
 }
