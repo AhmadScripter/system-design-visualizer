@@ -1,5 +1,7 @@
 import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { AfterViewInit, ChangeDetectorRef, Component, NgZone, PLATFORM_ID, inject, } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, NgZone, OnInit, PLATFORM_ID, inject, } from '@angular/core';
+import { Diagram } from '../../services/diagram';
+import { ActivatedRoute } from '@angular/router';
 
 interface NodeData {
   id: string;
@@ -19,7 +21,7 @@ interface SavedDiagram {
   templateUrl: './canvas.html',
   styleUrl: './canvas.css',
 })
-export class Canvas implements AfterViewInit {
+export class Canvas implements AfterViewInit, OnInit {
   private platformId = inject(PLATFORM_ID);
   private cdr = inject(ChangeDetectorRef);
   private zone = inject(NgZone);
@@ -30,8 +32,9 @@ export class Canvas implements AfterViewInit {
 
   private instanceReady!: Promise<void>;
   private resolveInstance!: () => void;
+  isSharedMode = false;
 
-  constructor() {
+  constructor(private diagramService: Diagram, private route: ActivatedRoute) {
     this.instanceReady = new Promise((res) => (this.resolveInstance = res));
   }
 
@@ -59,11 +62,26 @@ export class Canvas implements AfterViewInit {
     });
   }
 
+  ngOnInit() {
+    this.route.paramMap.subscribe(params => {
+      const id = params.get('id');
+
+      if (id) {
+        this.isSharedMode = true;
+        this.loadDiagramFromServer(id);
+      } else {
+        this.isSharedMode = false;
+      }
+    });
+  }
+
   selectNode(index: number) {
     this.selectedNodeIndex = index;
   }
 
+  // --------add node--------
   async addNode(type: string) {
+    if (this.isSharedMode) return;
     const id = 'node-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
     await this.instanceReady;
 
@@ -84,18 +102,18 @@ export class Canvas implements AfterViewInit {
   private _registerNode(nodeId: string) {
     const el = document.getElementById(nodeId);
     if (!el) return;
-  
+
     this.instance.draggable(el, {
       containment: true,
       stop: () => {
         const node = this.nodes.find(n => n.id === nodeId);
         if (!node) return;
-  
+
         node.x = parseInt(el.style.left, 10);
         node.y = parseInt(el.style.top, 10);
       }
     });
-  
+
     // Green dot — source
     this.instance.addEndpoint(el, {
       uuid: nodeId + '-source',
@@ -126,7 +144,6 @@ export class Canvas implements AfterViewInit {
   }
 
   // ------ Save ----------
-
   saveDiagram() {
     if (!this.instance) return;
 
@@ -134,7 +151,7 @@ export class Canvas implements AfterViewInit {
       const el = document.getElementById(node.id);
       const x = el ? parseInt(el.style.left, 10) : node.x;
       const y = el ? parseInt(el.style.top, 10) : node.y;
-    
+
       return {
         id: node.id,
         type: node.type,
@@ -156,7 +173,6 @@ export class Canvas implements AfterViewInit {
   }
 
   // ------ Load ---------
-
   async loadDiagram() {
     await this.instanceReady;
 
@@ -187,6 +203,75 @@ export class Canvas implements AfterViewInit {
       diagram.connections.forEach((conn) => {
         this.instance.connect({
           uuids: [conn.sourceUuid, conn.targetUuid],
+        });
+      });
+    });
+  }
+
+  // ------ share link ---------
+  shareDiagram() {
+    if (!this.instance) return;
+
+    const nodesData = this.nodes.map((node) => {
+      const el = document.getElementById(node.id);
+
+      return {
+        id: node.id,
+        type: node.type,
+        x: el ? parseInt(el.style.left, 10) : node.x,
+        y: el ? parseInt(el.style.top, 10) : node.y
+      };
+    });
+
+    const connections = this.instance.getAllConnections().map((conn: any) => ({
+      sourceUuid: conn.endpoints[0].getUuid(),
+      targetUuid: conn.endpoints[1].getUuid()
+    }));
+
+    const diagram = { nodes: nodesData, connections };
+
+    this.diagramService.saveDiagram(diagram).subscribe((res) => {
+      const link = `${window.location.origin}/diagram/${res.id}`;
+      navigator.clipboard.writeText(link);
+      alert('Link copied to clipboard');
+    });
+  }
+
+  loadDiagramFromServer(id: string) {
+    this.diagramService.fetchDiagram(id).subscribe(async (diagram: any) => {
+      if (!diagram) return;
+      await this.instanceReady;
+      this.renderDiagram(diagram);
+    });
+  }
+
+  async renderDiagram(diagram: any) {
+    await this.instanceReady;
+
+    this.instance.deleteEveryConnection();
+    this.instance.deleteEveryEndpoint();
+
+    this.nodes = [];
+    this.cdr.detectChanges();
+
+    diagram.nodes.forEach((n: any) => {
+      this.nodes.push({
+        id: n.id,
+        type: n.type,
+        x: n.x,
+        y: n.y
+      });
+    });
+
+    this.cdr.detectChanges();
+    await new Promise(requestAnimationFrame);
+
+    this.zone.runOutsideAngular(() => {
+      this.nodes.forEach(node => this._registerNode(node.id));
+
+      diagram.connections.forEach((conn: any) => {
+        this.instance.connect({
+          uuids: [conn.sourceUuid, conn.targetUuid]
         });
       });
     });
@@ -260,7 +345,6 @@ export class Canvas implements AfterViewInit {
 
     for (let i = 0; i < this.nodes.length; i++) {
       const node = this.nodes[i];
-      // const el = document.getElementById('node-' + i);
       const el = document.getElementById(node.id);
       if (!el) continue;
 
@@ -349,8 +433,9 @@ export class Canvas implements AfterViewInit {
   }
 
   deleteNode() {
+    if (this.isSharedMode) return;
     if (this.selectedNodeIndex === null) return;
-  
+
     const node = this.nodes[this.selectedNodeIndex];
     this.instance.removeAllEndpoints(node.id);
     this.nodes.splice(this.selectedNodeIndex, 1);
@@ -359,6 +444,7 @@ export class Canvas implements AfterViewInit {
   }
 
   editNode() {
+    if (this.isSharedMode) return;
     if (this.selectedNodeIndex === null) return;
     const newName = prompt('Enter new name');
     if (!newName) return;

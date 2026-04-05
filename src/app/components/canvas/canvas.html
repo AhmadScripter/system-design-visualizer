@@ -3,8 +3,9 @@
 
         <!-- Sidebar -->
         <div class="col-2 sidebar p-3 d-flex flex-column gap-2">
-            <h6 class="text-muted fw-semibold mb-1">NODES</h6>
 
+            @if (!isSharedMode) {
+            <h6 class="text-muted fw-semibold mb-1">NODES</h6>
             <button class="btn btn-primary btn-sm w-100" (click)="addNode('server')">
                 🖥️ Add Server
             </button>
@@ -35,36 +36,47 @@
             <hr class="my-1" />
             <button class="btn btn-dark btn-sm w-100" (click)="saveDiagram()">
                 💾 Save Diagram
-              </button>
-              
-              <button class="btn btn-secondary btn-sm w-100" (click)="loadDiagram()">
-                📂 Load Diagram
-              </button>
+            </button>
 
-              <button class="btn btn-success btn-sm w-100" (click)="downloadAsImage()">
+            <button class="btn btn-secondary btn-sm w-100" (click)="loadDiagram()">
+                📂 Load Diagram
+            </button>
+
+            <button class="btn btn-success btn-sm w-100" (click)="downloadAsImage()">
                 📸 Download PNG
-              </button>
-              <button class="btn btn-danger btn-sm w-100" (click)="deleteNode()">
+            </button>
+            <button class="btn btn-danger btn-sm w-100" (click)="deleteNode()">
                 ❌ Delete Selected Node
-              </button>
-              <button class="btn btn-warning btn-sm w-100" (click)="editNode()">
+            </button>
+            <button class="btn btn-warning btn-sm w-100" (click)="editNode()">
                 ✏️ Rename Node
-              </button>
+            </button>
+            <button class="btn btn-dark btn-sm w-100" (click)="shareDiagram()">
+                🔗 Share Diagram
+            </button>
             <hr class="my-1" />
 
             <button class="btn btn-outline-danger btn-sm w-100 mt-auto" (click)="deleteAllConnections()">
                 🗑️ Clear Connections
             </button>
+            }
+
+            @if (isSharedMode) {
+            <div class="alert alert-secondary text-center">
+                View Only Mode
+            </div>
+            <button class="btn btn-success btn-sm w-100" *ngIf="isSharedMode" (click)="downloadAsImage()">
+                Download PNG
+            </button>
+            }
+
         </div>
 
         <!-- Canvas -->
         <div class="col-10 canvas-area" id="canvas">
-            <div *ngFor="let node of nodes; let i = index"
-            class="node"
-            [ngClass]="['node-' + node.type, selectedNodeIndex === i ? 'selected' : '']"
-            (click)="selectNode(i)"
-            [attr.id]="node.id"
-            [ngStyle]="{ top: node.y + 'px', left: node.x + 'px' }">
+            <div *ngFor="let node of nodes; let i = index" class="node"
+                [ngClass]="['node-' + node.type, selectedNodeIndex === i ? 'selected' : '']" (click)="selectNode(i)"
+                [attr.id]="node.id" [ngStyle]="{ top: node.y + 'px', left: node.x + 'px' }">
                 <span class="node-icon">
                     {{ node.type === 'server' ? '🖥️'
                     : node.type === 'database' ? '🗄️'
