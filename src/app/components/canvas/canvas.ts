@@ -103,22 +103,24 @@ export class Canvas implements AfterViewInit, OnInit {
     const el = document.getElementById(nodeId);
     if (!el) return;
 
-    this.instance.draggable(el, {
-      containment: true,
-      stop: () => {
-        const node = this.nodes.find(n => n.id === nodeId);
-        if (!node) return;
+    if (!this.isSharedMode) {
+      this.instance.draggable(el, {
+        containment: true,
+        stop: () => {
+          const node = this.nodes.find(n => n.id === nodeId);
+          if (!node) return;
 
-        node.x = parseInt(el.style.left, 10);
-        node.y = parseInt(el.style.top, 10);
-      }
-    });
+          node.x = parseInt(el.style.left, 10);
+          node.y = parseInt(el.style.top, 10);
+        }
+      });
+    }
 
     // Green dot — source
     this.instance.addEndpoint(el, {
       uuid: nodeId + '-source',
       anchor: 'Right',
-      isSource: true,
+      isSource: !this.isSharedMode,
       isTarget: false,
       maxConnections: -1,
       paintStyle: { fill: '#198754', stroke: '#fff', strokeWidth: 2, radius: 7 },
@@ -132,7 +134,7 @@ export class Canvas implements AfterViewInit, OnInit {
       uuid: nodeId + '-target',
       anchor: 'Left',
       isSource: false,
-      isTarget: true,
+      isTarget: !this.isSharedMode,
       maxConnections: -1,
       paintStyle: { fill: '#dc3545', stroke: '#fff', strokeWidth: 2, radius: 7 },
       hoverPaintStyle: { fill: '#842029', stroke: '#fff', strokeWidth: 2, radius: 9 },
@@ -275,6 +277,17 @@ export class Canvas implements AfterViewInit, OnInit {
         });
       });
     });
+
+    if (this.isSharedMode) {
+      const connections = this.instance.getAllConnections();
+
+      connections.forEach((conn: any) => {
+        conn.setDetachable(false);
+        conn.setReattach(false);
+      });
+
+      this.instance.bind('beforeDrop', () => false);
+    }
   }
 
   async downloadAsImage() {
